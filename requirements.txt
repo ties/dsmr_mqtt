@@ -1,0 +1,2 @@
+dsmr-parser==0.8
+hbmqtt==0.8
