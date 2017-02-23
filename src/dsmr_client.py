@@ -84,16 +84,29 @@ class MQTTTransport(object):
 
     async def run(self):
         C = MQTTClient()
+        LOGGER.info("Starting reader loop")
         await C.connect('mqtt://{host}:{port}/'.format(host=self.host,
                                                        port=self.port))
-
-        LOGGER.info("Starting reader loop")
 
         while True:
             telegram = await self.queue.get()
             body = self.format_telegram(telegram)
             
             await C.publish('sensors/dsmr', body.encode('utf8'))
+
+async def main(loop, args):
+    mqtt = MQTTTransport(args.mqtt_host, args.mqtt_port)
+    tcp_reader = TcpReader(args.dsmr_host, args.dsmr_port, telegram_specifications.V4)
+
+    print("pre-start")
+
+    mqtt_f = asyncio.ensure_future(mqtt.run())
+    tcp_reader_f = asyncio.ensure_future(tcp_reader.read(mqtt.queue, loop))
+
+
+    done, pending = await asyncio.wait([mqtt_f, tcp_reader_f],
+                                       return_when=asyncio.FIRST_COMPLETED)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -105,7 +118,7 @@ if __name__ == '__main__':
                         default=os.environ.get('MQTT_PORT', 1883))
 
     parser.add_argument('--dsmr_host', type=str,
-                        default=os.environ.get('DSMR_HOST', '192.168.2.7'))
+                        default=os.environ.get('DSMR_HOST', '192.168.2.2'))
     parser.add_argument('--dsmr_port', type=int,
                         default=os.environ.get('DSMR_PORT', 23))
 
@@ -118,10 +131,6 @@ if __name__ == '__main__':
         logging.getLogger().setLevel(logging.DEBUG)
 
     loop = asyncio.get_event_loop()
-    mqtt = MQTTTransport(args.mqtt_host, args.mqtt_port)
-    tcp_reader = TcpReader(args.dsmr_host, args.dsmr_port, telegram_specifications.V4)
-
-    asyncio.ensure_future(mqtt.run(), loop=loop)
-    loop.run_until_complete(tcp_reader.read(mqtt.queue, loop))
+    loop.run_until_complete(main(loop, args))
     loop.close()
 
