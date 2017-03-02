@@ -134,8 +134,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     logging.basicConfig()
+    level = logging.INFO
+
     if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+        level = logging.DEBUG
+
+    logging.getLogger().setLevel(level)
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main(loop, args))
