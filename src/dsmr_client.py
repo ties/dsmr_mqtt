@@ -47,18 +47,9 @@ class TcpReader(object):
                         except ParseError as e:
                             LOGGER.warning('Failed to parse telegram: %s', e)
         except asyncio.QueueFull as e:
-            LOGGER.error('Queue full')
-        except Exception as e:
-            LOGGER.error(e)
-        finally:
-            try:
-                writer.close()
-            except:
-                pass
-            try:
-                reader.close()
-            except:
-                pass
+            LOGGER.exception('Queue full')
+        except Exception:
+            LOGGER.exception("exception in dsmr reader loop")
 
         return handled
 
@@ -112,18 +103,16 @@ class MQTTTransport(object):
             LOGGER.info("mqtt connected")
 
             while True:
-                telegram = await self.queue.get()
-                body = self.format_telegram(telegram)
-                
-                await C.publish('sensors/dsmr', body.encode('utf8'))
-                published += 1
+                with timeout(30):
+                    telegram = await self.queue.get()
+                    body = self.format_telegram(telegram)
+                    
+                    C.publish('sensors/dsmr', body.encode('utf8'))
+                    published += 1
         except Exception as e:
-            LOGGER.error("Error in connect/publish loop")
+            LOGGER.exception("Error in connect/publish loop")
         finally:
-            try:
-                await C.disconnect()
-            except:
-                pass
+            await C.disconnect()
 
         return published 
 
