@@ -121,7 +121,7 @@ class MQTTTransport(object):
             LOGGER.error("Error in connect/publish loop")
         finally:
             try:
-                yield from C.disconnect()
+                await C.disconnect()
             except:
                 pass
 
