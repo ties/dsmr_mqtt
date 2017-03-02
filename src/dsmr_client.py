@@ -24,26 +24,29 @@ class TcpReader(object):
         self.telegram_buffer = TelegramBuffer()
 
     async def read(self, queue, loop):
-        reader, writer = await asyncio.open_connection(self.host, self.port,
-                                                       loop=loop)
+        try:
+            reader, writer = await asyncio.open_connection(self.host, self.port,
+                                                           loop=loop)
 
-        while True:
-            data = await reader.readline()
-            self.telegram_buffer.append(data.decode('ascii'))
+            while True:
+                data = await reader.readline()
+                self.telegram_buffer.append(data.decode('ascii'))
 
-            for raw_telegram in self.telegram_buffer.get_all():
-                try:
-                    telegram = self.telegram_parser.parse(raw_telegram)
-                    # Push newly parsed telegram onto queue
-                    await queue.put(telegram)
-                except asyncio.QueueFull as e:
-                    LOGGER.error('Queue full')
-                    raise e
-                except ParseError as e:
-                    LOGGER.warning('Failed to parse telegram: %s', e)
-        
-        writer.close()
-        reader.close()
+                for raw_telegram in self.telegram_buffer.get_all():
+                    try:
+                        telegram = self.telegram_parser.parse(raw_telegram)
+                        # Push newly parsed telegram onto queue
+                        await queue.put(telegram)
+                    except ParseError as e:
+                        LOGGER.warning('Failed to parse telegram: %s', e)
+            
+            writer.close()
+            reader.close()
+        except asyncio.QueueFull as e:
+            LOGGER.error('Queue full')
+        except Exception as e:
+            LOGGER.error(e)
+
 
 class MessagePrinter(object):
     def __init__(self):
@@ -85,20 +88,24 @@ class MQTTTransport(object):
     async def run(self):
         C = MQTTClient()
         LOGGER.info("Starting reader loop")
-        await C.connect('mqtt://{host}:{port}/'.format(host=self.host,
-                                                       port=self.port))
+        try:
+            await C.connect('mqtt://{host}:{port}/'.format(host=self.host,
+                                                           port=self.port))
 
-        while True:
-            telegram = await self.queue.get()
-            body = self.format_telegram(telegram)
-            
-            await C.publish('sensors/dsmr', body.encode('utf8'))
+            while True:
+                telegram = await self.queue.get()
+                body = self.format_telegram(telegram)
+                
+                await C.publish('sensors/dsmr', body.encode('utf8'))
+        except Exception as e:
+            LOGGER.error("Error in connect/publish loop")
+
 
 async def main(loop, args):
     mqtt = MQTTTransport(args.mqtt_host, args.mqtt_port)
     tcp_reader = TcpReader(args.dsmr_host, args.dsmr_port, telegram_specifications.V4)
 
-    print("pre-start")
+    LOGGER.info("pre-start")
 
     mqtt_f = asyncio.ensure_future(mqtt.run())
     tcp_reader_f = asyncio.ensure_future(tcp_reader.read(mqtt.queue, loop))
