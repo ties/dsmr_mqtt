@@ -130,7 +130,7 @@ async def main(loop, args):
     done, pending = await asyncio.wait([mqtt_f, tcp_reader_f],
                                        return_when=asyncio.FIRST_EXCEPTION)
     LOGGER.info("after wait")
-    if LOGGER.isEnabledFor(LOGGER.INFO):
+    if LOGGER.isEnabledFor(logging.INFO):
         for msg in done:
             LOGGER.info(msg)
     return done
