@@ -85,6 +85,7 @@ class MessagePrinter(object):
             for ref, value in telegram.items():
                 print(inverse_references[ref], value.unit, value.value)
 
+
 class MQTTTransport(object):
     def __init__(self, host, port):
         self.queue = asyncio.Queue()
@@ -106,11 +107,11 @@ class MQTTTransport(object):
         return json.dumps(body)
 
     async def run(self):
-        C = MQTTClient()
-        LOGGER.info("connecting to mqtt broker")
-
         published = 0
         try:
+            C = MQTTClient()
+            LOGGER.info("connecting to mqtt broker")
+
             await C.connect('mqtt://{host}:{port}/'.format(host=self.host,
                                                            port=self.port))
 
@@ -139,7 +140,6 @@ async def main(loop, args):
 
     mqtt_f = asyncio.ensure_future(mqtt.run())
     tcp_reader_f = asyncio.ensure_future(tcp_reader.read(mqtt.queue, loop))
-
 
     done, pending = await asyncio.wait([mqtt_f, tcp_reader_f],
                                        return_when=asyncio.FIRST_EXCEPTION)
