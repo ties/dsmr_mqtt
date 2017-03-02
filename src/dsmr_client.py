@@ -107,7 +107,7 @@ class MQTTTransport(object):
                     telegram = await self.queue.get()
                     body = self.format_telegram(telegram)
                     
-                    C.publish('sensors/dsmr', body.encode('utf8'))
+                    await C.publish('sensors/dsmr', body.encode('utf8'))
                     published += 1
         except Exception as e:
             LOGGER.exception("Error in connect/publish loop")
