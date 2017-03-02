@@ -147,6 +147,10 @@ async def main(loop, args):
     if LOGGER.isEnabledFor(logging.INFO):
         for msg in done:
             LOGGER.info(msg)
+
+    LOGGER.info("stopping loop")
+    loop.stop()
+
     return done
 
 
@@ -178,5 +182,6 @@ if __name__ == '__main__':
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main(loop, args))
-    loop.close()
+
+    LOGGER.info("event loop finished, exiting")
 
