@@ -5,6 +5,8 @@ import json
 import logging
 import os
 
+from async_timeout import timeout
+
 from dsmr_parser import telegram_specifications, obis_references
 from dsmr_parser.clients.telegram_buffer import TelegramBuffer
 from dsmr_parser.exceptions import ParseError
@@ -25,20 +27,22 @@ class TcpReader(object):
 
     async def read(self, queue, loop):
         try:
+            LOGGER.info("connecting to dsmr reader")
             reader, writer = await asyncio.open_connection(self.host, self.port,
                                                            loop=loop)
 
             while True:
-                data = await reader.readline()
-                self.telegram_buffer.append(data.decode('ascii'))
+                with timeout(30):
+                    data = await reader.readline()
+                    self.telegram_buffer.append(data.decode('ascii'))
 
-                for raw_telegram in self.telegram_buffer.get_all():
-                    try:
-                        telegram = self.telegram_parser.parse(raw_telegram)
-                        # Push newly parsed telegram onto queue
-                        await queue.put(telegram)
-                    except ParseError as e:
-                        LOGGER.warning('Failed to parse telegram: %s', e)
+                    for raw_telegram in self.telegram_buffer.get_all():
+                        try:
+                            telegram = self.telegram_parser.parse(raw_telegram)
+                            # Push newly parsed telegram onto queue
+                            await queue.put(telegram)
+                        except ParseError as e:
+                            LOGGER.warning('Failed to parse telegram: %s', e)
             
             writer.close()
             reader.close()
@@ -87,10 +91,12 @@ class MQTTTransport(object):
 
     async def run(self):
         C = MQTTClient()
-        LOGGER.info("Starting reader loop")
+        LOGGER.info("connecting to mqtt broker")
         try:
             await C.connect('mqtt://{host}:{port}/'.format(host=self.host,
                                                            port=self.port))
+
+            LOGGER.info("mqtt connected")
 
             while True:
                 telegram = await self.queue.get()
