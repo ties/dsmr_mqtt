@@ -26,6 +26,8 @@ class TcpReader(object):
         self.telegram_buffer = TelegramBuffer()
 
     async def read(self, queue, loop):
+        handled = 0
+
         try:
             LOGGER.info("connecting to dsmr reader")
             reader, writer = await asyncio.open_connection(self.host, self.port,
@@ -37,19 +39,28 @@ class TcpReader(object):
                     self.telegram_buffer.append(data.decode('ascii'))
 
                     for raw_telegram in self.telegram_buffer.get_all():
+                        handled += 1
                         try:
                             telegram = self.telegram_parser.parse(raw_telegram)
                             # Push newly parsed telegram onto queue
                             await queue.put(telegram)
                         except ParseError as e:
                             LOGGER.warning('Failed to parse telegram: %s', e)
-            
-            writer.close()
-            reader.close()
         except asyncio.QueueFull as e:
             LOGGER.error('Queue full')
         except Exception as e:
             LOGGER.error(e)
+        finally:
+            try:
+                writer.close()
+            except:
+                pass
+            try:
+                reader.close()
+            except:
+                pass
+
+        return handled
 
 
 class MessagePrinter(object):
@@ -92,6 +103,8 @@ class MQTTTransport(object):
     async def run(self):
         C = MQTTClient()
         LOGGER.info("connecting to mqtt broker")
+
+        published = 0
         try:
             await C.connect('mqtt://{host}:{port}/'.format(host=self.host,
                                                            port=self.port))
@@ -103,8 +116,16 @@ class MQTTTransport(object):
                 body = self.format_telegram(telegram)
                 
                 await C.publish('sensors/dsmr', body.encode('utf8'))
+                published += 1
         except Exception as e:
             LOGGER.error("Error in connect/publish loop")
+        finally:
+            try:
+                yield from C.disconnect()
+            except:
+                pass
+
+        return published 
 
 
 async def main(loop, args):
