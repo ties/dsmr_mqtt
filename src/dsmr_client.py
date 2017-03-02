@@ -139,7 +139,10 @@ async def main(loop, args):
 
 
     done, pending = await asyncio.wait([mqtt_f, tcp_reader_f],
-                                       return_when=asyncio.FIRST_COMPLETED)
+                                       return_when=asyncio.FIRST_EXCEPTION)
+    LOGGER.info("after wait")
+    LOGGER.info("done: {}", done)
+    return done
 
 
 if __name__ == '__main__':
