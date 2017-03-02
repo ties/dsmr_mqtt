@@ -1,3 +1,17 @@
+"""
+**Uses asyncio with async/await syntax**
+Requires python 3.5.2 to run without modification
+
+Connect to a TCP socket and read P1 telegrams over TCP. Parse these
+and push them onto a queue.
+
+A second coroutine sends them to a MQTT broker.
+
+dependencies:
+dsmr-parser
+hbmqtt
+async-timeout
+"""
 import argparse
 import asyncio
 
