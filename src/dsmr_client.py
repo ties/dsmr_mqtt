@@ -142,7 +142,7 @@ async def main(loop, args):
     tcp_reader_f = asyncio.ensure_future(tcp_reader.read(mqtt.queue, loop))
 
     done, pending = await asyncio.wait([mqtt_f, tcp_reader_f],
-                                       return_when=asyncio.FIRST_EXCEPTION)
+                                       return_when=asyncio.FIRST_COMPLETED)
     LOGGER.info("after wait")
     if LOGGER.isEnabledFor(logging.INFO):
         for msg in done:
