@@ -25,6 +25,7 @@ from dsmr_parser import telegram_specifications, obis_references
 from dsmr_parser.clients.telegram_buffer import TelegramBuffer
 from dsmr_parser.exceptions import ParseError
 from dsmr_parser.parsers import TelegramParser
+from dsmr_parser.clients import AsyncSerialReader, SERIAL_SETTINGS_V4
 
 from hbmqtt.client import MQTTClient
 
@@ -87,7 +88,12 @@ class MessagePrinter(object):
 
 
 class MQTTTransport(object):
-    def __init__(self, host, port):
+    verbose: bool
+    host: str
+    port: int
+    queue: asyncio.Queue
+
+    def __init__(self, host: str, port: int, verbose: bool = False):
         self.queue = asyncio.Queue()
 
         self.host = host
@@ -103,6 +109,9 @@ class MQTTTransport(object):
             'current_power_l2': int(1000 * telegram[obis_references.INSTANTANEOUS_ACTIVE_POWER_L2_POSITIVE].value),
             'current_power_l3': int(1000 * telegram[obis_references.INSTANTANEOUS_ACTIVE_POWER_L3_POSITIVE].value),
         }
+
+        if LOGGER.isEnabledFor(logging.DEBUG):
+            LOGGER.debug(body)
 
         return json.dumps(body)
 
@@ -121,7 +130,7 @@ class MQTTTransport(object):
                 with timeout(30):
                     telegram = await self.queue.get()
                     body = self.format_telegram(telegram)
-                    
+
                     await C.publish('sensors/dsmr', body.encode('utf8'))
                     published += 1
         except Exception as e:
@@ -129,17 +138,20 @@ class MQTTTransport(object):
         finally:
             await C.disconnect()
 
-        return published 
+        return published
 
 
 async def main(loop, args):
     mqtt = MQTTTransport(args.mqtt_host, args.mqtt_port)
-    tcp_reader = TcpReader(args.dsmr_host, args.dsmr_port, telegram_specifications.V4)
+    # tcp_reader = TcpReader(args.dsmr_host, args.dsmr_port,
+    #                        telegram_specifications.V4)
+    serial_reader = AsyncSerialReader(args.port, SERIAL_SETTINGS_V4,
+                                      telegram_specifications.V4)
 
     LOGGER.info("pre-start")
 
     mqtt_f = asyncio.ensure_future(mqtt.run())
-    tcp_reader_f = asyncio.ensure_future(tcp_reader.read(mqtt.queue, loop))
+    tcp_reader_f = asyncio.ensure_future(serial_reader.read(mqtt.queue))
 
     done, pending = await asyncio.wait([mqtt_f, tcp_reader_f],
                                        return_when=asyncio.FIRST_COMPLETED)
@@ -162,12 +174,7 @@ if __name__ == '__main__':
                         default=os.environ.get('MQTT_HOST', '172.16.0.2'))
     parser.add_argument('--mqtt_port', type=int,
                         default=os.environ.get('MQTT_PORT', 1883))
-
-    parser.add_argument('--dsmr_host', type=str,
-                        default=os.environ.get('DSMR_HOST', '192.168.2.2'))
-    parser.add_argument('--dsmr_port', type=int,
-                        default=os.environ.get('DSMR_PORT', 23))
-
+    parser.add_argument('--port', type=str, default='/dev/ttyUSB0')
     parser.add_argument('--verbose', action='store_true')
 
     args = parser.parse_args()
